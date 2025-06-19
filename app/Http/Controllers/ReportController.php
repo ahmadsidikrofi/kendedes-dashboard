@@ -23,24 +23,45 @@ class ReportController extends Controller
             'report_file' => 'required|mimes:xlsx,xls'
         ]);
 
-        $collection = Excel::toCollection(new \stdClass, $request->file('report_file'))->first();
+        try {
+            $collection = Excel::toCollection(new \stdClass, $request->file('report_file'))->first();
 
-        $reportData = $collection->skip(1)
-        ->filter(fn ($row) => !empty($row[2]))
-        ->groupBy(2)
-        ->map(function ($group, $kecamatan) {
-            return [
-                'kecamatan' => $kecamatan,
-                'jumlah' => $group->count(), // Hitung jumlah usaha di kecamatan tsb
+            // Debug: Lihat struktur data
+            // dd($collection->take(5)->toArray());
+
+            $reportData = $collection->skip(1) // Skip header
+                ->filter(function ($row) {
+                    // Filter baris yang memiliki data kecamatan (index 3)
+                    return !empty($row[3]) && $row[3] !== null;
+                })
+                ->groupBy(function ($row) {
+                    // Group berdasarkan kolom Kec (index 3)
+                    return $row[3];
+                })
+                ->map(function ($group, $kecamatan) {
+                    return [
+                        'kecamatan' => $kecamatan,
+                        'jumlah' => $group->count(),
+                    ];
+                })
+                ->sortBy('kecamatan')
+                ->values();
+
+            // dd($reportData->toArray());
+
+            $chartData = [
+                'labels' => $reportData->pluck('kecamatan')->toArray(),
+                'values' => $reportData->pluck('jumlah')->toArray(),
             ];
-        })
-        ->sortBy('kecamatan') // Urutkan berdasarkan nama kecamatan
-        ->values();
 
-        $chartData = [
-            'labels' => $reportData->pluck('kecamatan'),
-            'values' => $reportData->pluck('jumlah'),
-        ];
-        return redirect()->route('dashboard')->with('chartData', $chartData);
+            // Store ke session dengan flash
+            session()->flash('chartData', $chartData);
+            session()->flash('success', 'Data berhasil diproses! Ditemukan ' . $reportData->count() . ' kecamatan.');
+
+            return redirect()->route('dashboard');
+
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', 'Error memproses file: ' . $e->getMessage());
+        }
     }
 }

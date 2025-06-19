@@ -1,4 +1,9 @@
-<div class="bg-white rounded-xl shadow-sm p-6">
+@props([
+    'labels' => [],
+    'values' => []
+])
+
+<div class="bg-white rounded-xl shadow-sm p-6" x-data="reportChart({{ json_encode(array_values($labels)) }}, {{ json_encode(array_values($values)) }})">
     <div class="mb-6">
         <h3 class="text-xl font-semibold text-gray-800 mb-6">
             Report Jumlah Usaha Berdasarkan Kabupaten/Kota
@@ -31,11 +36,9 @@
 
         <div class="relative h-64 bg-gradient-to-t from-gray-50 to-white rounded-lg p-4">
             <div class="absolute left-0 top-0 h-full flex flex-col justify-between text-xs text-gray-600 pr-2">
-                <span>270.000</span>
-                <span>250.000</span>
-                <span>230.000</span>
-                <span>210.000</span>
-                <span>190.000</span>
+                <template x-for="label in yAxisLabels" :key="label">
+                    <span x-text="label"></span>
+                </template>
             </div>
 
             <div class="ml-12 h-full relative">
@@ -54,12 +57,11 @@
                         </linearGradient>
                     </defs>
                 </svg>
-
-                <template x-for="(point, index) in dataPoints" :key="index">
-                    <div class="absolute w-3 h-3 bg-cyan-400 rounded-full transform -translate-x-1/2 -translate-y-1/2 border-2 border-white shadow-sm"
-                         :style="`left: ${point.x}%; top: ${point.y}%`">
-                    </div>
-                </template>
+                <div class="absolute -bottom-6 left-12 right-0 h-6 flex justify-between text-xs text-gray-500">
+                    <template x-for="label in chartLabels" :key="label">
+                        <span class="transform -rotate-45" x-text="label"></span>
+                    </template>
+                </div>
             </div>
         </div>
     </div>
@@ -71,23 +73,41 @@
 </div>
 
 <script>
-    function reportChart() {
+    function reportChart(labels, values) {
         return {
-            chartData: [
-                { value: 195000 }, { value: 210000 }, { value: 230000 },
-                { value: 235000 }, { value: 250000 }, { value: 265000 }, { value: 272268 }
-            ],
+            chartLabels: labels,
+            chartValues: values,
+            yAxisLabels: [],
             dataPoints: [],
             polylinePoints: '',
             init() {
-                const minValue = 190000;
-                const maxValue = 275000;
-                this.dataPoints = this.chartData.map((point, index) => {
-                    const x = (index / (this.chartData.length - 1)) * 100;
-                    const y = 100 - ((point.value - minValue) / (maxValue - minValue)) * 100;
+                if (this.chartValues.length === 0) return;
+
+                const minValue = Math.min(...this.chartValues);
+                const maxValue = Math.max(...this.chartValues);
+
+                // Membuat label Y-axis secara dinamis
+                this.yAxisLabels = [];
+                const stepCount = 4; // Jumlah step label (misal: 5 label)
+                for (let i = stepCount; i >= 0; i--) {
+                    const value = minValue + (i/stepCount) * (maxValue - minValue);
+                    this.yAxisLabels.push(this.formatNumber(value));
+                }
+
+                this.dataPoints = this.chartValues.map((value, index) => {
+                    const x = (index / (this.chartValues.length - 1)) * 100;
+                    const y = 100 - ((value - minValue) / (maxValue - minValue)) * 100;
+                    // Handle jika hanya ada 1 data point
+                    if (this.chartValues.length === 1) {
+                        return { x: 50, y: 50 };
+                    }
                     return { x, y };
                 });
+
                 this.polylinePoints = this.dataPoints.map(p => `${p.x},${p.y}`).join(' ');
+            },
+            formatNumber(num) {
+                return new Intl.NumberFormat('id-ID').format(Math.round(num));
             }
         }
     }
